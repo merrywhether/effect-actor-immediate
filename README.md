@@ -23,11 +23,33 @@ plain-send case, the restored tree never receives `GO`. In the acknowledged
 case, the snapshot records the finished child, but restore neither restarts
 that child nor recreates its missing completion notification.
 
-The recovery expectation is that restoring a checkpoint eventually produces
-the same parent result as uninterrupted execution. This expectation applies
-both before the input has been processed and after it has generated further
-work. `sendAndAwait` acknowledges processing of one event; it does not promise
-that the whole actor tree has settled.
+`sendAndAwait` acknowledges processing of one event; it does not promise
+that the whole actor tree has settled. These tests ask whether the captured
+snapshot alone is enough to resume the tree and eventually reach the same
+parent result as uninterrupted execution.
+
+## What external replay can recover
+
+The plain-send case is not, by itself, evidence of a bug in `actor.send()`:
+it does not acknowledge processing. A host could journal `GO` outside XState
+and redeliver it after restoring this pre-processing snapshot. More generally,
+replaying from an earlier consistent checkpoint requires a journal of the
+relevant events and outcomes, with external effects recorded or safe to repeat.
+This demo deliberately tests recovery without that additional protocol.
+
+The acknowledged case is harder: the snapshot already includes progress from
+`GO`, including the finished child. The original input is still available to
+the host, but the missing internal continuation is not another application
+command it can simply replay. The parent's `invoke.onDone` handler reacts to
+the child's lifecycle; restoring a finished child does not deliver that
+notification again. Resending `GO` to this advanced snapshot does not recreate
+it either.
+
+Recording actor states therefore does not necessarily preserve a way to
+resume every pending interaction. An external journal can support recovery
+from an earlier point, but replaying external inputs against an already
+advanced snapshot is insufficient. Snapshot-only recovery needs to retain or
+reconstruct the pending internal work as well.
 
 ## Run
 
