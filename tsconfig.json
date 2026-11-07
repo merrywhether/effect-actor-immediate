@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["reproduce.ts"]
+  "include": ["reproduce.ts", "invoke-chain.ts"]
 }

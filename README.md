@@ -32,9 +32,16 @@ still active when captured. Restoration restarts that invocation, whose new
 completion reaches the parent. This shows why the pattern can appear reliable
 with a slower request while failing with an already-resolved Promise.
 
+A second example in [invoke-chain.ts](invoke-chain.ts) invokes a child state
+machine instead of an async request. Completing the child leaves its parent's
+`onDone` notification queued; restoration strands the parent in `working`
+instead of `success`. No Promise is involved in that child machine.
+
 The plain-send case loses work earlier: `FETCH` is still queued when captured,
 so the parent is still `idle` and no request has started. Its failure does not
-depend on how quickly the request would resolve.
+depend on how quickly the request would resolve. We include `actor.send()`
+only to show that preserving the inbox would also recover this queued external
+input, alongside the internal completion notifications.
 
 ## What external replay can recover
 
@@ -62,18 +69,18 @@ pnpm typecheck
 pnpm test
 ```
 
-`pnpm typecheck` passes. **The two already-resolved reproduction tests fail**:
-the immediate restored actors remain in `idle` and `loading`, respectively,
-instead of reaching `success`. **The slower-Promise control passes.**
+`pnpm typecheck` passes. **Three reproduction tests fail**: the fetch examples
+remain in `idle` and `loading`, and the child-machine example remains in
+`working`, instead of reaching `success`. **The slower-Promise control passes.**
 
 Each reproduction also checks uninterrupted execution and a settled-snapshot
-restore, including the greeting data, before asserting the failing immediate
-restore. `immediateSnapshot` is captured immediately after the selected send
-method; `settledSnapshot` is captured after the uninterrupted actor reaches
+restore before asserting the failing immediate restore. The fetch examples
+also check the greeting data. `immediateSnapshot` is captured immediately after
+the selected send method; `settledSnapshot` is captured after the uninterrupted actor reaches
 `success` and processes a subsequent no-op `PING`, letting that transition's
 child cleanup finish. Both are JSON-round-tripped. The immediate restored actor
-receives one acknowledged no-op `PING` to show that it processes new events; this is a
-liveness check, not a settlement mechanism. Each immediate restore gets up to
+receives one acknowledged no-op `PING` to show that it processes new events;
+this is a liveness check, not a settlement mechanism. Each immediate restore gets up to
 one second to reach `success` before the assertion reports its actual state.
 
 The reproduction uses packages pinned to `xstate` 6.0.0-beta.1,
