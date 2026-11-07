@@ -6,7 +6,7 @@
   "packageManager": "pnpm@10.33.2",
   "engines": { "node": ">=26" },
   "scripts": {
-    "test": "node reproduce.ts",
+    "test": "node --test reproduce.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

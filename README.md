@@ -1,28 +1,33 @@
-# Restoring an immediate snapshot loses a child's completion
+# Restoring an immediate snapshot loses queued work
 
 This example has one parent actor and one child. The parent increments
 `completedChildren` when it handles the child's `onDone` notification.
 The child finishes once, so the expected eventual count is **1**.
 
-The example saves the actor tree immediately after `sendAndAwait(parent, GO)`.
-At that point, the child is finished but the parent has not handled its
-notification yet: its count is **0**. That is a valid intermediate state.
+Two independent tests save the actor tree immediately after sending `GO`:
 
-The problem appears after restoring that checkpoint. The restored parent stays
-at **0**, whereas the uninterrupted parent reaches **1**. A parent waiting for
-the child before starting its next stage would therefore remain stuck.
+| Send method | Capture point on the pinned versions | Work missing after restore |
+| --- | --- | --- |
+| `actor.send(GO)` | `GO` is still queued for the parent | The original input |
+| `sendAndAwait(actor, GO)` | The child finished, but the parent has not handled its notification | The child's completion notification |
 
-## Why the completion is lost
+The parent's count is **0** at both capture points. That is a valid intermediate
+state. The problem is that restoring either checkpoint leaves the count at
+**0**, whereas uninterrupted execution reaches **1**. A workflow waiting for
+that completion would therefore remain stuck.
 
-The snapshot saves the child's finished state, but not the completion
-notification queued for its parent. Restore does not restart a finished child
-or recreate that notification. The parent's `onDone` transition is lost.
+## Why the work is lost
 
-The recovery expectation tested here is that a checkpoint of the actor tree
-should eventually produce the same parent result as uninterrupted execution,
-without running the child's work again. `sendAndAwait` does not promise that
-the whole tree has settled; this example asks how to obtain a recoverable
-checkpoint when child completion and parent notification straddle the capture.
+The persisted snapshot records actor state but omits queued messages. In the
+plain-send case, the restored tree never receives `GO`. In the acknowledged
+case, the snapshot records the finished child, but restore neither restarts
+that child nor recreates its missing completion notification.
+
+The recovery expectation is that restoring a checkpoint eventually produces
+the same parent result as uninterrupted execution. This expectation applies
+both before the input has been processed and after it has generated further
+work. `sendAndAwait` acknowledges processing of one event; it does not promise
+that the whole actor tree has settled.
 
 ## Run
 
@@ -34,22 +39,25 @@ pnpm typecheck
 pnpm test
 ```
 
-`pnpm test` runs the example and checks these cases:
+`pnpm test` reports both send methods separately. Each test uses fresh actors
+and checks these observations:
 
 | Observation | Parent's completed-child count |
 | --- | --- |
-| `immediateSnapshot`: child finished, notification pending | 0 |
-| `uninterruptedActor` handles the notification | 1 |
+| `uninterruptedActor` handles the completion | 1 |
 | `immediateRestoredActor` restores `immediateSnapshot` | **0 — expected 1** |
 | `settledRestoredActor` restores `settledSnapshot` as a control | 1 |
 
-The checkpoints are JSON-round-tripped. Each restored actor receives one
-acknowledged no-op `PING`, showing it can process new events. This is a liveness
-check, not a general settlement mechanism. The control shows that restoring an
-already-recorded parent result works.
+Both checkpoints are JSON-round-tripped. `immediateSnapshot` is captured
+immediately after the selected send method; `settledSnapshot` is captured
+after the uninterrupted parent reaches **1**. Each restored actor receives
+one acknowledged no-op `PING`, showing it can process new events. That is a
+liveness check, not a general settlement mechanism.
 
-`pnpm typecheck` passes. **`pnpm test` currently fails** on the recovery
-expectation: the restored parent has handled zero completions instead of one.
+`pnpm typecheck` passes. **Both reproduction tests currently fail** on the
+recovery expectation: the immediate restored parent has handled zero
+completions instead of one. Their uninterrupted and settled-restore controls
+pass first.
 
 The reproduction uses unmodified published packages pinned to `xstate`
 6.0.0-beta.1, `@xstate/effect` 1.0.0-beta.0 and `effect` 4.1.2 so a newer
