@@ -1,0 +1,7 @@
+{
+  "name": "xstate-flat-snapshot-system-repro",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node repro.mjs" },
+  "dependencies": { "xstate": "6.0.0-beta.1" }
+}

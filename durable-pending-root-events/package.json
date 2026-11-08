@@ -1,0 +1,11 @@
+{
+  "name": "durable-pending-root-events-repro",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test repro.mjs"
+  },
+  "dependencies": {
+    "xstate": "6.0.0-beta.1"
+  }
+}
