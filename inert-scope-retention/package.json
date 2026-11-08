@@ -1,0 +1,12 @@
+{
+  "name": "xstate-inert-scope-retention-repro",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --expose-gc repro.mjs",
+    "control": "node --expose-gc repro.mjs --control"
+  },
+  "dependencies": {
+    "xstate": "6.0.0-beta.1"
+  }
+}
