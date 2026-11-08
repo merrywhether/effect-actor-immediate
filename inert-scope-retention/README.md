@@ -1,6 +1,8 @@
 # Earlier snapshots retained after reading `self`
 
-A durable machine reads `self.id` during each transition. An object appears only in the tenth snapshot's context; the next transition removes it. An otherwise unreferenced earlier context should be collectible while the current execution and snapshot remain alive. In xstate 6.0.0-beta.1, the marker remains reachable through previous materialized actor scopes. The assertion fails after a macrotask and forced garbage collection.
+A pure `transition()` loop reads `self.id` during each machine transition. An object appears only in the tenth snapshot's context; the next transition removes it. An otherwise unreferenced earlier context should be collectible while the current snapshot remains alive. In xstate 6.0.0-beta.1, the marker remains reachable through previous materialized actor scopes. The assertion fails after a macrotask and forced garbage collection.
+
+Durable and Effect executions use this pure transition path and can also be affected. Native actors created with `createActor` do not use this path.
 
 This is related to [the snapshot-system delegation issue](https://github.com/statelyai/xstate/issues/5869), which addresses a separate growing system-view chain.
 

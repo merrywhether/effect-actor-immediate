@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
-import { createMachine } from 'xstate';
-import { createDurable } from 'xstate/durable';
+import { createMachine, initialTransition, transition } from 'xstate';
 
 assert.equal(typeof globalThis.gc, 'function', 'Run with node --expose-gc');
 const readSelf = !process.argv.includes('--control');
@@ -18,20 +17,13 @@ const machine = createMachine({
     }
   }
 });
-const execution = createDurable(machine, {
-  executeAction: (effect) => effect.exec(),
-  waitForEvent: () => new Promise(() => {})
-});
-let [snapshot, effects] = execution.initialTransition();
-await execution.executeEffects(effects);
+let [snapshot] = initialTransition(machine);
 let marker;
 for (let i = 0; i < 100; i++) {
-  [snapshot, effects] = execution.transition(snapshot, { type: 'TICK' });
-  await execution.executeEffects(effects);
+  [snapshot] = transition(machine, snapshot, { type: 'TICK' });
   if (i === 9) marker = new WeakRef(snapshot.context.marker);
 }
 await new Promise((resolve) => setImmediate(resolve));
 for (let i = 0; i < 4; i++) globalThis.gc();
 assert.equal(marker.deref(), undefined, 'The old context marker should be collectible');
 assert.equal(snapshot.context.count, 100);
-assert.ok(execution);
