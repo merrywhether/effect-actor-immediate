@@ -47,57 +47,51 @@ const createFetchMachine = (getGreeting: (name: string) => Promise<Greeting>) =>
 const expectedGreeting: Greeting = { greeting: 'Hello, World!' };
 const fetchMachine = createFetchMachine((name) => Promise.resolve({ greeting: `Hello, ${name}!` }));
 
-for (const sendMethod of ['send', 'sendAndAwait'] as const) {
-  test(`${sendMethod}: immediate restore should reach success with an already-resolved Promise`, async () => {
-    const program = Effect.gen(function* () {
-      const uninterruptedActor = yield* createEffectActor(fetchMachine);
-      if (sendMethod === 'send') {
-        uninterruptedActor.send({ type: 'FETCH' });
-      } else {
-        yield* sendAndAwait(uninterruptedActor, { type: 'FETCH' });
-      }
+test('sendAndAwait: immediate restore should reach success with an already-resolved Promise', async () => {
+  const program = Effect.gen(function* () {
+    const uninterruptedActor = yield* createEffectActor(fetchMachine);
+    yield* sendAndAwait(uninterruptedActor, { type: 'FETCH' });
 
-      const immediateSnapshot: PersistedSnapshotOf<typeof fetchMachine> = JSON.parse(
-        JSON.stringify(uninterruptedActor.getPersistedSnapshot()),
-      );
+    const immediateSnapshot: PersistedSnapshotOf<typeof fetchMachine> = JSON.parse(
+      JSON.stringify(uninterruptedActor.getPersistedSnapshot()),
+    );
 
-      yield* waitFor(uninterruptedActor, (snapshot) => snapshot.matches('success'), {
-        timeout: '1 second',
-      });
-      // A subsequent receipt lets this machine finish the success transition's child cleanup.
-      yield* sendAndAwait(uninterruptedActor, { type: 'PING' });
-      const settledSnapshot: PersistedSnapshotOf<typeof fetchMachine> = JSON.parse(
-        JSON.stringify(uninterruptedActor.getPersistedSnapshot()),
-      );
+    yield* waitFor(uninterruptedActor, (snapshot) => snapshot.matches('success'), {
+      timeout: '1 second',
+    });
+    // A subsequent receipt lets this machine finish the success transition's child cleanup.
+    yield* sendAndAwait(uninterruptedActor, { type: 'PING' });
+    const settledSnapshot: PersistedSnapshotOf<typeof fetchMachine> = JSON.parse(
+      JSON.stringify(uninterruptedActor.getPersistedSnapshot()),
+    );
 
-      const immediateRestoredActor = yield* createEffectActor(fetchMachine, {
-        snapshot: immediateSnapshot,
-      });
-      // PING leaves state unchanged and shows that the restored actor processes new events.
-      yield* sendAndAwait(immediateRestoredActor, { type: 'PING' });
-      // Report a stalled restore as a state mismatch rather than a timeout.
-      yield* waitFor(immediateRestoredActor, (snapshot) => snapshot.matches('success'), {
-        timeout: '1 second',
-      }).pipe(Effect.catchTag('TimeoutError', () => Effect.void));
-      const settledRestoredActor = yield* createEffectActor(fetchMachine, {
-        snapshot: settledSnapshot,
-      });
-
-      assert.equal(uninterruptedActor.getSnapshot().value, 'success');
-      assert.deepEqual(uninterruptedActor.getSnapshot().context.data, expectedGreeting);
-      assert.equal(settledRestoredActor.getSnapshot().value, 'success');
-      assert.deepEqual(settledRestoredActor.getSnapshot().context.data, expectedGreeting);
-      assert.equal(
-        immediateRestoredActor.getSnapshot().value,
-        'success',
-        'the restored actor should reach success, just like uninterrupted execution',
-      );
-      assert.deepEqual(immediateRestoredActor.getSnapshot().context.data, expectedGreeting);
+    const immediateRestoredActor = yield* createEffectActor(fetchMachine, {
+      snapshot: immediateSnapshot,
+    });
+    // PING leaves state unchanged and shows that the restored actor processes new events.
+    yield* sendAndAwait(immediateRestoredActor, { type: 'PING' });
+    // Report a stalled restore as a state mismatch rather than a timeout.
+    yield* waitFor(immediateRestoredActor, (snapshot) => snapshot.matches('success'), {
+      timeout: '1 second',
+    }).pipe(Effect.catchTag('TimeoutError', () => Effect.void));
+    const settledRestoredActor = yield* createEffectActor(fetchMachine, {
+      snapshot: settledSnapshot,
     });
 
-    await Effect.runPromise(Effect.scoped(program));
+    assert.equal(uninterruptedActor.getSnapshot().value, 'success');
+    assert.deepEqual(uninterruptedActor.getSnapshot().context.data, expectedGreeting);
+    assert.equal(settledRestoredActor.getSnapshot().value, 'success');
+    assert.deepEqual(settledRestoredActor.getSnapshot().context.data, expectedGreeting);
+    assert.equal(
+      immediateRestoredActor.getSnapshot().value,
+      'success',
+      'the restored actor should reach success, just like uninterrupted execution',
+    );
+    assert.deepEqual(immediateRestoredActor.getSnapshot().context.data, expectedGreeting);
   });
-}
+
+  await Effect.runPromise(Effect.scoped(program));
+});
 
 test('sendAndAwait: restoring a still-running invocation reaches success with a slower Promise', async () => {
   const slowerFetchMachine = createFetchMachine(

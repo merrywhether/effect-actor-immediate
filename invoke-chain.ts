@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import { Effect } from 'effect';
 import { createEffectActor, waitFor } from '@xstate/effect';
 import { sendAndAwait } from '@xstate/effect/test';
-import { setup, types, type PersistedSnapshotOf } from 'xstate';
+import { createActor, setup, types, type PersistedSnapshotOf } from 'xstate';
+import { restoreActor } from 'xstate/persist';
 
 const child = setup({
   schemas: { events: { WORK: types<{}>() } },
@@ -30,6 +31,21 @@ const parent = setup({
     },
     success: {},
   },
+});
+
+test('native actor: the same machines restore to success after an immediate capture', () => {
+  const actor = createActor(parent).start();
+  actor.send({ type: 'GO' });
+  // `send()` finishes the child and the parent's onDone before it returns.
+  const immediateSnapshot: PersistedSnapshotOf<typeof parent> = JSON.parse(
+    JSON.stringify(actor.getPersistedSnapshot()),
+  );
+  const restoredActor = restoreActor(parent, immediateSnapshot).start();
+
+  assert.equal(actor.getSnapshot().value, 'success');
+  assert.equal(restoredActor.getSnapshot().value, 'success');
+  actor.stop();
+  restoredActor.stop();
 });
 
 test('sendAndAwait: restoring a parent with a completed child machine should handle onDone', async () => {
