@@ -2,7 +2,7 @@
 
 `@xstate/effect` documents persisting an actor by acknowledging an event with
 `sendAndAwait`, then saving `actor.getPersistedSnapshot()`. See
-[Persisting and restoring](https://github.com/statelyai/xstate/blob/d84d1dedac9f2c62082cf2c2094daee8d32ad0a9/packages/xstate-effect/docs/actors.md#persisting-and-restoring).
+[Persisting and restoring](https://github.com/statelyai/xstate/blob/c558afa20cb7bda22ac24aaa7f250b523d490ade/packages/xstate-effect/docs/actors.md#persisting-and-restoring).
 With ordinary machines, that snapshot can capture a parent still waiting on a
 child that has already finished. The restored parent never leaves its waiting
 state.
@@ -21,6 +21,9 @@ unmodified published packages:
 | Effect, `sendAndAwait` | Fetch, Promise resolves on the next timer turn | `loading` / `active` | Reaches `success`: the running invocation restarts |
 | Native `createActor`, `send` | Child machine | `success` | Reaches `success` |
 
+The same results hold with both XState packages built from `next` at
+`c558afa20c`, which includes [durable inbox checkpoints](https://github.com/statelyai/xstate/pull/5889).
+
 ## Why it gets stuck
 
 `sendAndAwait` acknowledges processing one event and handing off its immediate
@@ -31,8 +34,9 @@ queued for the parent. The persisted snapshot records the finished child and
 omits that queued completion. Restoration does not restart a completed child or
 deliver its completion again, so the parent's `invoke.onDone` never runs.
 
-Resending the original event doesn't help: the parent no longer handles it in
-its waiting state, and the child is already done.
+Resending the original event doesn't recover the completion. The fetch machine
+handles `FETCH` only in `idle`, and in the child-machine example `GO` sends
+`WORK` to an already-completed child.
 
 The slower-Promise control shows why this can look reliable: its child is still
 running when captured, and restoration restarts it. The native actor runs the
